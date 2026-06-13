@@ -13,13 +13,14 @@ use crossterm::terminal::{
 use ratatui::Frame;
 use ratatui::Terminal;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use crate::app::{AppMode, PanelFocus, RuneApp};
 use crate::git;
 use crate::git::diff;
 use crate::keybind::{Action, map_key};
+use crate::theme;
 
 type CrosstermTerminal = ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>;
 
@@ -55,11 +56,19 @@ fn run_app(
     app: &mut RuneApp,
 ) -> Result<()> {
     let mut dialog: Option<crate::tui::panels::dialog::DialogState> = None;
+    let mut refresh_counter: u64 = 0;
 
     loop {
         terminal.draw(|f| draw(f, app, &dialog))?;
 
         if !event::poll(Duration::from_millis(100))? {
+            refresh_counter += 1;
+            if refresh_counter.is_multiple_of(10) {
+                let _ = refresh_state(repo, app);
+                if app.mode == AppMode::Diff || app.focus == PanelFocus::Diff {
+                    let _ = load_diff(repo, app);
+                }
+            }
             continue;
         }
 
@@ -123,40 +132,28 @@ fn draw(f: &mut Frame, app: &RuneApp, dialog: &Option<crate::tui::panels::dialog
         return;
     }
 
+    let main_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(f.area());
+    let main_area = main_layout[0];
+    let status_area = main_layout[1];
+
     match app.mode {
         AppMode::Tree | AppMode::Diff => {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-                .split(f.area());
+                .split(main_area);
 
             crate::tui::panels::tree::render(f, chunks[0], app);
             crate::tui::panels::diff::render(f, chunks[1], app);
-
-            let status_line = format!(
-                " {} | ? help | q quit | Tab focus | s stage | c commit | l log | / filter",
-                app.current_branch,
-            );
-            let status_bar = Paragraph::new(status_line)
-                .style(Style::default().fg(Color::Gray).bg(Color::Black))
-                .block(
-                    Block::default()
-                        .borders(Borders::TOP)
-                        .border_style(Style::default().fg(Color::DarkGray)),
-                );
-            let status_area = Rect {
-                x: 0,
-                y: f.area().height.saturating_sub(1),
-                width: f.area().width,
-                height: 1,
-            };
-            f.render_widget(status_bar, status_area);
         }
         AppMode::CommitLog => {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
-                .split(f.area());
+                .split(main_area);
 
             crate::tui::panels::commitlog::render(f, chunks[0], app);
             crate::tui::panels::diff::render(f, chunks[1], app);
@@ -165,6 +162,19 @@ fn draw(f: &mut Frame, app: &RuneApp, dialog: &Option<crate::tui::panels::dialog
             draw_help(f);
         }
     }
+
+    let status_line = format!(
+        " {} | ? help | q quit | Tab focus | s stage | c commit | l log | / filter",
+        app.current_branch,
+    );
+    let status_bar = Paragraph::new(status_line)
+        .style(Style::default().fg(theme::STATUS_TEXT).bg(theme::STATUS_BG))
+        .block(
+            Block::default()
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(theme::BORDER_UNFOCUSED)),
+        );
+    f.render_widget(status_bar, status_area);
 }
 
 fn draw_help(f: &mut Frame) {
@@ -199,8 +209,13 @@ fn draw_help(f: &mut Frame) {
     .join("\n");
 
     let para = Paragraph::new(help_text)
-        .block(Block::default().borders(Borders::ALL).title(" Help "))
-        .style(Style::default().fg(Color::White));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Help ")
+                .border_style(theme::focused_border()),
+        )
+        .style(Style::default().fg(theme::TEXT));
 
     f.render_widget(para, f.area());
 }

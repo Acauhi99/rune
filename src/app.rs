@@ -78,6 +78,7 @@ impl FileDiff {
 }
 
 #[allow(dead_code)]
+#[derive(PartialEq)]
 pub enum AppMode {
     Tree,
     Diff,
@@ -85,6 +86,7 @@ pub enum AppMode {
     Help,
 }
 
+#[derive(PartialEq)]
 pub enum PanelFocus {
     Tree,
     Diff,

@@ -1,9 +1,11 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, Clear, Paragraph},
 };
+
+use crate::theme;
 
 pub enum DialogType {
     CommitMessage,
@@ -44,11 +46,13 @@ pub fn render_commit_dialog(f: &mut Frame, area: Rect, dialog: &DialogState) {
     let block = Block::default()
         .title(" Commit ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Cyan));
+        .border_style(theme::focused_border())
+        .style(Style::default().bg(theme::SURFACE));
 
     let inner = block.inner(area);
 
     let prompt = Paragraph::new("Enter commit message:")
+        .style(Style::default().fg(theme::TEXT))
         .block(Block::default())
         .alignment(Alignment::Left);
 
@@ -61,11 +65,15 @@ pub fn render_commit_dialog(f: &mut Frame, area: Rect, dialog: &DialogState) {
 
     let input_block = Block::default()
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Cyan));
+        .border_style(theme::focused_border())
+        .style(Style::default().bg(theme::BG));
 
-    let input_para = Paragraph::new(dialog.input.as_str()).block(input_block);
+    let input_para = Paragraph::new(dialog.input.as_str())
+        .style(Style::default().fg(theme::TEXT))
+        .block(input_block);
 
     let hint = Paragraph::new("Enter to confirm, Esc to cancel")
+        .style(Style::default().fg(theme::TEXT_DIM))
         .block(Block::default())
         .alignment(Alignment::Left);
 
@@ -87,7 +95,8 @@ pub fn render_branch_dialog(f: &mut Frame, area: Rect, dialog: &DialogState) {
     let block = Block::default()
         .title(" Switch Branch ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Cyan));
+        .border_style(theme::focused_border())
+        .style(Style::default().bg(theme::SURFACE));
 
     let inner = block.inner(area);
 
@@ -105,9 +114,12 @@ pub fn render_branch_dialog(f: &mut Frame, area: Rect, dialog: &DialogState) {
         .collect();
 
     let text = items.join("\n");
-    let para = Paragraph::new(text).block(Block::default());
+    let para = Paragraph::new(text)
+        .style(Style::default().fg(theme::TEXT))
+        .block(Block::default());
 
     let hint = Paragraph::new("↑↓ to navigate, Enter to select, Esc to cancel")
+        .style(Style::default().fg(theme::TEXT_DIM))
         .block(Block::default())
         .alignment(Alignment::Left);
 

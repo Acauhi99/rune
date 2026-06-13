@@ -1,20 +1,21 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Text,
     widgets::{Block, Borders, HighlightSpacing, List, ListItem, ListState},
 };
 
 use crate::app::{FileStatus, RuneApp};
+use crate::theme;
 
 pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
     let block = Block::default()
         .title(format!(" Files ({}) ", app.changed_files.len()))
         .borders(Borders::ALL)
         .border_style(match app.focus {
-            crate::app::PanelFocus::Tree => Style::default().fg(Color::Cyan),
-            _ => Style::default(),
+            crate::app::PanelFocus::Tree => theme::focused_border(),
+            _ => theme::unfocused_border(),
         });
 
     let files = app.filtered_files();
@@ -22,12 +23,12 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
         .iter()
         .map(|f| {
             let icon = match f.status {
-                FileStatus::Added => (" +", Color::Green),
-                FileStatus::Modified => (" ~", Color::Yellow),
-                FileStatus::Deleted => (" -", Color::Red),
-                FileStatus::Renamed => (" >", Color::Cyan),
-                FileStatus::Copied => (" >>", Color::Magenta),
-                FileStatus::Untracked => (" ?", Color::Gray),
+                FileStatus::Added => (" +", theme::GREEN),
+                FileStatus::Modified => (" ~", theme::YELLOW),
+                FileStatus::Deleted => (" -", theme::RED),
+                FileStatus::Renamed => (" >", theme::CYAN),
+                FileStatus::Copied => (" >>", theme::MAGENTA),
+                FileStatus::Untracked => (" ?", theme::GRAY),
             };
 
             let staged_mark = if f.staged { "*" } else { " " };
@@ -46,12 +47,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
     let mut list_state = ListState::default().with_selected(Some(app.selected_file));
     let list = List::new(items)
         .block(block)
-        .highlight_style(
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
+        .highlight_style(theme::selected_item())
         .highlight_spacing(HighlightSpacing::Always);
 
     f.render_stateful_widget(list, area, &mut list_state);

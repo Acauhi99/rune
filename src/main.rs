@@ -1,6 +1,7 @@
 mod app;
 mod git;
 mod keybind;
+mod theme;
 mod tui;
 
 use std::path::PathBuf;

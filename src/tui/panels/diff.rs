@@ -14,6 +14,7 @@ use syntect::util::LinesWithEndings;
 
 use crate::app::{DiffLineKind, RuneApp};
 use crate::git::diff::get_side_by_side;
+use crate::theme;
 
 fn syntax_set() -> &'static SyntaxSet {
     static SS: OnceLock<SyntaxSet> = OnceLock::new();
@@ -63,8 +64,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
         .title(" Diff ")
         .borders(Borders::ALL)
         .border_style(match app.focus {
-            crate::app::PanelFocus::Diff => Style::default().fg(Color::Cyan),
-            _ => Style::default(),
+            crate::app::PanelFocus::Diff => theme::focused_border(),
+            _ => theme::unfocused_border(),
         });
 
     if area.width < 40 {
@@ -94,16 +95,19 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
             .and_then(|e| e.to_str())
             .unwrap_or("");
 
+        let inner_area = block.inner(area);
+        let col_width = ((inner_area.width.saturating_sub(1)) / 2).max(20) as usize;
+
         let mut lines: Vec<Line> = Vec::new();
 
         for hunk in &diff.hunks {
             let header_text = hunk.header.trim();
             lines.push(Line::from(Span::styled(
                 header_text,
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(theme::DIFF_HEADER)
+                    .add_modifier(Modifier::DIM),
             )));
-
-            let col_width = ((area.width.saturating_sub(4)) / 2).max(20) as usize;
             let pairs = get_side_by_side(hunk);
 
             for &(old_line, new_line) in &pairs {
@@ -122,7 +126,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
                     let padded_left = format!("{:<width$}", left_text, width = col_width);
                     let spans: Vec<Span> = std::iter::once(Span::styled(
                         padded_left,
-                        Style::default().fg(Color::White),
+                        Style::default().fg(theme::TEXT),
                     ))
                     .chain(std::iter::once(Span::raw("│")))
                     .chain(right_line.spans)
@@ -185,9 +189,9 @@ fn prefix_and_kind(
 
 fn diff_prefix_style(kind: &DiffLineKind) -> Style {
     match kind {
-        DiffLineKind::Add => Style::default().fg(Color::Green),
-        DiffLineKind::Delete => Style::default().fg(Color::Red),
-        DiffLineKind::Context => Style::default().fg(Color::White),
+        DiffLineKind::Add => Style::default().fg(theme::GREEN),
+        DiffLineKind::Delete => Style::default().fg(theme::RED),
+        DiffLineKind::Context => Style::default().fg(theme::TEXT),
     }
 }
 
