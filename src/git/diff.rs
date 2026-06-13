@@ -1,6 +1,6 @@
-use std::path::Path;
 use anyhow::Result;
 use git2::{DiffOptions, Repository};
+use std::path::Path;
 
 use crate::app::{DiffLine, DiffLineKind, FileDiff, Hunk};
 
@@ -23,19 +23,12 @@ pub fn get_workdir_diff(repo: &Repository, path: &Path) -> Result<FileDiff> {
 }
 
 pub fn get_staged_diff(repo: &Repository, path: &Path) -> Result<FileDiff> {
-    let head_tree = repo
-        .head()
-        .ok()
-        .and_then(|h| h.peel_to_tree().ok());
+    let head_tree = repo.head().ok().and_then(|h| h.peel_to_tree().ok());
 
     let mut opts = DiffOptions::new();
     opts.pathspec(path);
 
-    let diff = repo.diff_tree_to_index(
-        head_tree.as_ref(),
-        None,
-        Some(&mut opts),
-    )?;
+    let diff = repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut opts))?;
 
     let old_path = path.to_path_buf();
     let new_path = path.to_path_buf();
@@ -54,11 +47,7 @@ pub fn get_commit_diff(repo: &Repository, commit_id: git2::Oid) -> Result<Vec<Fi
     let tree = commit.tree()?;
     let parent_tree = commit.parents().next().and_then(|p| p.tree().ok());
 
-    let diff = repo.diff_tree_to_tree(
-        parent_tree.as_ref(),
-        Some(&tree),
-        None,
-    )?;
+    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
 
     let mut files = Vec::new();
 
@@ -88,10 +77,7 @@ fn diff_to_hunks(diff: &git2::Diff, file_path: &Path) -> Result<Vec<Hunk>> {
     let mut hunks = Vec::new();
 
     for (delta_idx, delta) in diff.deltas().enumerate() {
-        let delta_path = delta
-            .new_file()
-            .path()
-            .or_else(|| delta.old_file().path());
+        let delta_path = delta.new_file().path().or_else(|| delta.old_file().path());
 
         if delta_path != Some(file_path) {
             continue;
@@ -158,10 +144,7 @@ pub fn get_side_by_side(hunk: &Hunk) -> Vec<(Option<&DiffLine>, Option<&DiffLine
                 if !old_lines.is_empty() || !new_lines.is_empty() {
                     let max = old_lines.len().max(new_lines.len());
                     for i in 0..max {
-                        pairs.push((
-                            old_lines.get(i).copied(),
-                            new_lines.get(i).copied(),
-                        ));
+                        pairs.push((old_lines.get(i).copied(), new_lines.get(i).copied()));
                     }
                     old_lines.clear();
                     new_lines.clear();
@@ -174,10 +157,7 @@ pub fn get_side_by_side(hunk: &Hunk) -> Vec<(Option<&DiffLine>, Option<&DiffLine
     if !old_lines.is_empty() || !new_lines.is_empty() {
         let max = old_lines.len().max(new_lines.len());
         for i in 0..max {
-            pairs.push((
-                old_lines.get(i).copied(),
-                new_lines.get(i).copied(),
-            ));
+            pairs.push((old_lines.get(i).copied(), new_lines.get(i).copied()));
         }
     }
 

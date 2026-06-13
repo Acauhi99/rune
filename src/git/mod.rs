@@ -1,8 +1,8 @@
 pub mod diff;
 
-use std::path::Path;
 use anyhow::{Context, Result};
 use git2::{BranchType, DiffOptions, Repository, StatusOptions, StatusShow};
+use std::path::Path;
 
 use crate::app::{BranchInfo, ChangedFile, CommitInfo, FileStatus};
 
@@ -20,12 +20,7 @@ pub fn list_changed_files(repo: &Repository) -> Result<Vec<ChangedFile>> {
     let mut files = Vec::new();
 
     for entry in statuses.iter() {
-        let path = Path::new(
-            entry
-                .path()
-                .unwrap_or("<unknown>"),
-        )
-        .to_path_buf();
+        let path = Path::new(entry.path().unwrap_or("<unknown>")).to_path_buf();
         let flags = entry.status();
 
         let staged = flags.intersects(
@@ -36,20 +31,30 @@ pub fn list_changed_files(repo: &Repository) -> Result<Vec<ChangedFile>> {
                 | git2::Status::INDEX_TYPECHANGE,
         );
 
-        let status = if flags.contains(git2::Status::WT_NEW) || flags.contains(git2::Status::INDEX_NEW)
-        {
-            FileStatus::Added
-        } else if flags.contains(git2::Status::WT_DELETED) || flags.contains(git2::Status::INDEX_DELETED) {
-            FileStatus::Deleted
-        } else if flags.contains(git2::Status::WT_RENAMED) || flags.contains(git2::Status::INDEX_RENAMED) {
-            FileStatus::Renamed
-        } else if flags.contains(git2::Status::WT_TYPECHANGE) || flags.contains(git2::Status::INDEX_TYPECHANGE) {
-            FileStatus::Copied
-        } else {
-            FileStatus::Modified
-        };
+        let status =
+            if flags.contains(git2::Status::WT_NEW) || flags.contains(git2::Status::INDEX_NEW) {
+                FileStatus::Added
+            } else if flags.contains(git2::Status::WT_DELETED)
+                || flags.contains(git2::Status::INDEX_DELETED)
+            {
+                FileStatus::Deleted
+            } else if flags.contains(git2::Status::WT_RENAMED)
+                || flags.contains(git2::Status::INDEX_RENAMED)
+            {
+                FileStatus::Renamed
+            } else if flags.contains(git2::Status::WT_TYPECHANGE)
+                || flags.contains(git2::Status::INDEX_TYPECHANGE)
+            {
+                FileStatus::Copied
+            } else {
+                FileStatus::Modified
+            };
 
-        files.push(ChangedFile { path, status, staged });
+        files.push(ChangedFile {
+            path,
+            status,
+            staged,
+        });
     }
 
     files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -116,11 +121,7 @@ pub fn get_commit_files(repo: &Repository, commit_id: git2::Oid) -> Result<Vec<C
     let parent_tree = commit.parents().next().and_then(|p| p.tree().ok());
 
     let mut diff_opts = DiffOptions::new();
-    let diff = repo.diff_tree_to_tree(
-        parent_tree.as_ref(),
-        Some(&tree),
-        Some(&mut diff_opts),
-    )?;
+    let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), Some(&mut diff_opts))?;
 
     let mut files = Vec::new();
 
@@ -186,10 +187,7 @@ pub fn create_commit(repo: &Repository, message: &str) -> Result<()> {
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
 
-    let parent_commit = repo
-        .head()
-        .ok()
-        .and_then(|h| h.peel_to_commit().ok());
+    let parent_commit = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
 
     let parents: Vec<&git2::Commit> = parent_commit.iter().collect();
     repo.commit(
@@ -211,5 +209,3 @@ pub fn switch_branch(repo: &Repository, name: &str) -> Result<()> {
     repo.reset(commit.as_object(), git2::ResetType::Hard, None)?;
     Ok(())
 }
-
-

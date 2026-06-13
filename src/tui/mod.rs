@@ -5,28 +5,23 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::Result;
-use crossterm::event::{
-    self, Event, KeyCode, KeyEventKind, MouseEventKind,
-};
-use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen,
-    LeaveAlternateScreen,
-};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, MouseEventKind};
 use crossterm::execute;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use ratatui::Frame;
+use ratatui::Terminal;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
-use ratatui::Frame;
-use ratatui::Terminal;
 
 use crate::app::{AppMode, PanelFocus, RuneApp};
 use crate::git;
 use crate::git::diff;
-use crate::keybind::{map_key, Action};
+use crate::keybind::{Action, map_key};
 
-type CrosstermTerminal = ratatui::Terminal<
-    ratatui::backend::CrosstermBackend<std::io::Stdout>,
->;
+type CrosstermTerminal = ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>;
 
 pub fn run(repo_path: &Path) -> Result<()> {
     enable_raw_mode()?;
@@ -90,9 +85,10 @@ fn run_app(
             Event::Key(key) if key.kind == KeyEventKind::Press => {
                 let action = map_key(key);
                 if let Some(action) = action
-                    && handle_action(action, repo, app, &mut dialog)? {
-                        break;
-                    }
+                    && handle_action(action, repo, app, &mut dialog)?
+                {
+                    break;
+                }
             }
             Event::Mouse(mouse) => {
                 handle_mouse(mouse, app);
@@ -104,11 +100,7 @@ fn run_app(
     Ok(())
 }
 
-fn draw(
-    f: &mut Frame,
-    app: &RuneApp,
-    dialog: &Option<crate::tui::panels::dialog::DialogState>,
-) {
+fn draw(f: &mut Frame, app: &RuneApp, dialog: &Option<crate::tui::panels::dialog::DialogState>) {
     if app.show_help {
         draw_help(f);
         return;
@@ -122,14 +114,10 @@ fn draw(
 
         match dialog_state.dialog_type {
             crate::tui::panels::dialog::DialogType::CommitMessage => {
-                crate::tui::panels::dialog::render_commit_dialog(
-                    f, dialog_area, dialog_state,
-                );
+                crate::tui::panels::dialog::render_commit_dialog(f, dialog_area, dialog_state);
             }
             crate::tui::panels::dialog::DialogType::BranchPicker => {
-                crate::tui::panels::dialog::render_branch_dialog(
-                    f, dialog_area, dialog_state,
-                );
+                crate::tui::panels::dialog::render_branch_dialog(f, dialog_area, dialog_state);
             }
         }
         return;
@@ -139,10 +127,7 @@ fn draw(
         AppMode::Tree | AppMode::Diff => {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(30),
-                    Constraint::Percentage(70),
-                ])
+                .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
                 .split(f.area());
 
             crate::tui::panels::tree::render(f, chunks[0], app);
@@ -170,10 +155,7 @@ fn draw(
         AppMode::CommitLog => {
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(40),
-                    Constraint::Percentage(60),
-                ])
+                .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
                 .split(f.area());
 
             crate::tui::panels::commitlog::render(f, chunks[0], app);
@@ -217,11 +199,7 @@ fn draw_help(f: &mut Frame) {
     .join("\n");
 
     let para = Paragraph::new(help_text)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Help "),
-        )
+        .block(Block::default().borders(Borders::ALL).title(" Help "))
         .style(Style::default().fg(Color::White));
 
     f.render_widget(para, f.area());
@@ -288,10 +266,9 @@ fn handle_action(
         Action::ScrollUp => {
             app.diff_scroll = app.diff_scroll.saturating_sub(5);
         }
-        Action::ScrollDown
-            if app.diff_scroll < 10000 => {
-                app.diff_scroll += 5;
-            }
+        Action::ScrollDown if app.diff_scroll < 10000 => {
+            app.diff_scroll += 5;
+        }
         Action::Enter => {
             if matches!(app.mode, AppMode::CommitLog) {
                 if let Some(commit) = app.commits.get(app.selected_commit) {
@@ -338,16 +315,13 @@ fn handle_action(
             refresh_state(repo, app)?;
         }
         Action::Commit => {
-            *dialog = Some(
-                crate::tui::panels::dialog::DialogState::new_commit(),
-            );
+            *dialog = Some(crate::tui::panels::dialog::DialogState::new_commit());
         }
         Action::CommitLog => {
             if matches!(app.mode, AppMode::CommitLog) {
                 app.mode = AppMode::Tree;
             } else {
-                let _ =
-                    git::get_commit_history(repo, 100).map(|c| app.commits = c);
+                let _ = git::get_commit_history(repo, 100).map(|c| app.commits = c);
                 app.mode = AppMode::CommitLog;
                 app.selected_commit = 0;
             }
@@ -356,16 +330,10 @@ fn handle_action(
             refresh_state(repo, app)?;
         }
         Action::BranchSwitch => {
-            let _ =
-                git::list_branches(repo).map(|b| {
-                    let names: Vec<String> =
-                        b.into_iter().map(|bi| bi.name).collect();
-                    *dialog = Some(
-                        crate::tui::panels::dialog::DialogState::new_branch(
-                            names,
-                        ),
-                    );
-                });
+            let _ = git::list_branches(repo).map(|b| {
+                let names: Vec<String> = b.into_iter().map(|bi| bi.name).collect();
+                *dialog = Some(crate::tui::panels::dialog::DialogState::new_branch(names));
+            });
         }
         Action::Filter => {
             app.filter_active = true;
@@ -384,64 +352,56 @@ fn handle_dialog_event(
     app: &mut RuneApp,
 ) -> Result<bool> {
     match event {
-        Event::Key(key) if key.kind == KeyEventKind::Press => {
-            match key.code {
-                KeyCode::Esc => {
+        Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+            KeyCode::Esc => {
+                return Ok(true);
+            }
+            KeyCode::Enter => match dialog_state.dialog_type {
+                crate::tui::panels::dialog::DialogType::CommitMessage => {
+                    let msg = dialog_state.input.trim().to_string();
+                    if !msg.is_empty() {
+                        let _ = git::create_commit(repo, &msg);
+                        refresh_state(repo, app)?;
+                    }
                     return Ok(true);
                 }
-                KeyCode::Enter => {
-                    match dialog_state.dialog_type {
-                        crate::tui::panels::dialog::DialogType::CommitMessage => {
-                            let msg = dialog_state.input.trim().to_string();
-                            if !msg.is_empty() {
-                                let _ = git::create_commit(repo, &msg);
-                                refresh_state(repo, app)?;
-                            }
-                            return Ok(true);
-                        }
-                        crate::tui::panels::dialog::DialogType::BranchPicker => {
-                            if let Some(name) = dialog_state
-                                .branches
-                                .get(dialog_state.selected_branch)
-                            {
-                                let _ = git::switch_branch(repo, name);
-                                refresh_state(repo, app)?;
-                            }
-                            return Ok(true);
-                        }
+                crate::tui::panels::dialog::DialogType::BranchPicker => {
+                    if let Some(name) = dialog_state.branches.get(dialog_state.selected_branch) {
+                        let _ = git::switch_branch(repo, name);
+                        refresh_state(repo, app)?;
                     }
+                    return Ok(true);
                 }
-                KeyCode::Up | KeyCode::Char('k')
-                    if matches!(
-                        dialog_state.dialog_type,
-                        crate::tui::panels::dialog::DialogType::BranchPicker
-                    ) && dialog_state.selected_branch > 0
-                    => {
-                        dialog_state.selected_branch -= 1;
-                    }
-                KeyCode::Down | KeyCode::Char('j')
-                    if matches!(
-                        dialog_state.dialog_type,
-                        crate::tui::panels::dialog::DialogType::BranchPicker
-                    ) && dialog_state.selected_branch + 1
-                        < dialog_state.branches.len()
-                    => {
-                        dialog_state.selected_branch += 1;
-                    }
-                KeyCode::Char(c) => {
-                    if matches!(
-                        dialog_state.dialog_type,
-                        crate::tui::panels::dialog::DialogType::CommitMessage
-                    ) {
-                        dialog_state.input.push(c);
-                    }
-                }
-                KeyCode::Backspace => {
-                    dialog_state.input.pop();
-                }
-                _ => {}
+            },
+            KeyCode::Up | KeyCode::Char('k')
+                if matches!(
+                    dialog_state.dialog_type,
+                    crate::tui::panels::dialog::DialogType::BranchPicker
+                ) && dialog_state.selected_branch > 0 =>
+            {
+                dialog_state.selected_branch -= 1;
             }
-        }
+            KeyCode::Down | KeyCode::Char('j')
+                if matches!(
+                    dialog_state.dialog_type,
+                    crate::tui::panels::dialog::DialogType::BranchPicker
+                ) && dialog_state.selected_branch + 1 < dialog_state.branches.len() =>
+            {
+                dialog_state.selected_branch += 1;
+            }
+            KeyCode::Char(c) => {
+                if matches!(
+                    dialog_state.dialog_type,
+                    crate::tui::panels::dialog::DialogType::CommitMessage
+                ) {
+                    dialog_state.input.push(c);
+                }
+            }
+            KeyCode::Backspace => {
+                dialog_state.input.pop();
+            }
+            _ => {}
+        },
         _ => {}
     }
 
@@ -450,26 +410,24 @@ fn handle_dialog_event(
 
 fn handle_filter_event(event: Event, app: &mut RuneApp) -> Result<bool> {
     match event {
-        Event::Key(key) if key.kind == KeyEventKind::Press => {
-            match key.code {
-                KeyCode::Esc => {
-                    app.filter_active = false;
-                    app.filter_text.clear();
-                }
-                KeyCode::Enter => {
-                    app.filter_active = false;
-                }
-                KeyCode::Char(c) if !c.is_control() => {
-                    app.filter_text.push(c);
-                    app.selected_file = 0;
-                }
-                KeyCode::Backspace => {
-                    app.filter_text.pop();
-                    app.selected_file = 0;
-                }
-                _ => {}
+        Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+            KeyCode::Esc => {
+                app.filter_active = false;
+                app.filter_text.clear();
             }
-        }
+            KeyCode::Enter => {
+                app.filter_active = false;
+            }
+            KeyCode::Char(c) if !c.is_control() => {
+                app.filter_text.push(c);
+                app.selected_file = 0;
+            }
+            KeyCode::Backspace => {
+                app.filter_text.pop();
+                app.selected_file = 0;
+            }
+            _ => {}
+        },
         _ => {}
     }
     Ok(false)
@@ -477,41 +435,34 @@ fn handle_filter_event(event: Event, app: &mut RuneApp) -> Result<bool> {
 
 fn handle_mouse(event: crossterm::event::MouseEvent, app: &mut RuneApp) {
     match event.kind {
-        MouseEventKind::ScrollDown => {
-            match app.focus {
-                PanelFocus::Tree => {
-                    let count = app.filtered_files().len();
-                    if app.selected_file + 1 < count {
-                        app.selected_file += 1;
-                    }
-                }
-                PanelFocus::Diff => {
-                    if app.diff_scroll < 10000 {
-                        app.diff_scroll += 3;
-                    }
+        MouseEventKind::ScrollDown => match app.focus {
+            PanelFocus::Tree => {
+                let count = app.filtered_files().len();
+                if app.selected_file + 1 < count {
+                    app.selected_file += 1;
                 }
             }
-        }
-        MouseEventKind::ScrollUp => {
-            match app.focus {
-                PanelFocus::Tree => {
-                    if app.selected_file > 0 {
-                        app.selected_file -= 1;
-                    }
-                }
-                PanelFocus::Diff => {
-                    app.diff_scroll = app.diff_scroll.saturating_sub(3);
+            PanelFocus::Diff => {
+                if app.diff_scroll < 10000 {
+                    app.diff_scroll += 3;
                 }
             }
-        }
+        },
+        MouseEventKind::ScrollUp => match app.focus {
+            PanelFocus::Tree => {
+                if app.selected_file > 0 {
+                    app.selected_file -= 1;
+                }
+            }
+            PanelFocus::Diff => {
+                app.diff_scroll = app.diff_scroll.saturating_sub(3);
+            }
+        },
         _ => {}
     }
 }
 
-fn refresh_state(
-    repo: &git2::Repository,
-    app: &mut RuneApp,
-) -> Result<()> {
+fn refresh_state(repo: &git2::Repository, app: &mut RuneApp) -> Result<()> {
     app.changed_files = git::list_changed_files(repo)?;
     app.current_branch = git::get_current_branch(repo);
     app.branches = git::list_branches(repo)?;
@@ -521,10 +472,7 @@ fn refresh_state(
     Ok(())
 }
 
-fn load_diff(
-    repo: &git2::Repository,
-    app: &mut RuneApp,
-) -> Result<()> {
+fn load_diff(repo: &git2::Repository, app: &mut RuneApp) -> Result<()> {
     let path = app.selected_file_entry().map(|f| f.path.clone());
 
     if let Some(path) = path {

@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use git2::Oid;
+use std::path::PathBuf;
 
 pub struct ChangedFile {
     pub path: PathBuf,
@@ -135,12 +135,7 @@ impl RuneApp {
         let lower = self.filter_text.to_lowercase();
         self.changed_files
             .iter()
-            .filter(|f| {
-                f.path
-                    .to_string_lossy()
-                    .to_lowercase()
-                    .contains(&lower)
-            })
+            .filter(|f| f.path.to_string_lossy().to_lowercase().contains(&lower))
             .collect()
     }
 

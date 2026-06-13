@@ -1,0 +1,18 @@
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      run: cargo fmt --check
+      stage_fixed: true
+    clippy:
+      run: cargo clippy -- -D warnings
+
+pre-push:
+  parallel: false
+  commands:
+    fmt:
+      run: cargo fmt --check
+    clippy:
+      run: cargo clippy -- -D warnings
+    test:
+      run: cargo test

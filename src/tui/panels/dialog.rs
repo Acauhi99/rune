@@ -1,8 +1,8 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Rect},
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph},
-    Frame,
 };
 
 pub enum DialogType {
@@ -63,8 +63,7 @@ pub fn render_commit_dialog(f: &mut Frame, area: Rect, dialog: &DialogState) {
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::Cyan));
 
-    let input_para = Paragraph::new(dialog.input.as_str())
-        .block(input_block);
+    let input_para = Paragraph::new(dialog.input.as_str()).block(input_block);
 
     let hint = Paragraph::new("Enter to confirm, Esc to cancel")
         .block(Block::default())
@@ -106,14 +105,11 @@ pub fn render_branch_dialog(f: &mut Frame, area: Rect, dialog: &DialogState) {
         .collect();
 
     let text = items.join("\n");
-    let para = Paragraph::new(text)
-        .block(Block::default());
+    let para = Paragraph::new(text).block(Block::default());
 
-    let hint = Paragraph::new(
-        "↑↓ to navigate, Enter to select, Esc to cancel",
-    )
-    .block(Block::default())
-    .alignment(Alignment::Left);
+    let hint = Paragraph::new("↑↓ to navigate, Enter to select, Esc to cancel")
+        .block(Block::default())
+        .alignment(Alignment::Left);
 
     let hint_area = Rect {
         x: inner.x,

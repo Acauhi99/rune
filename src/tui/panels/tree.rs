@@ -1,12 +1,12 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::Text,
     widgets::{Block, Borders, HighlightSpacing, List, ListItem, ListState},
-    Frame,
 };
 
-use crate::app::{RuneApp, FileStatus};
+use crate::app::{FileStatus, RuneApp};
 
 pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
     let block = Block::default()
@@ -31,20 +31,13 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
             };
 
             let staged_mark = if f.staged { "*" } else { " " };
-            let label = format!(
-                "{}{} {}",
-                staged_mark,
-                icon.0,
-                f.path.to_string_lossy()
-            );
+            let label = format!("{}{} {}", staged_mark, icon.0, f.path.to_string_lossy());
 
-            let style = Style::default()
-                .fg(icon.1)
-                .add_modifier(if f.staged {
-                    Modifier::BOLD
-                } else {
-                    Modifier::empty()
-                });
+            let style = Style::default().fg(icon.1).add_modifier(if f.staged {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            });
 
             ListItem::new(Text::styled(label, style))
         })

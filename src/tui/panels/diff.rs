@@ -1,11 +1,11 @@
 use std::sync::OnceLock;
 
 use ratatui::{
+    Frame,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{FontStyle, ThemeSet};
@@ -98,14 +98,10 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
 
         for hunk in &diff.hunks {
             let header_text = hunk.header.trim();
-            lines.push(Line::from(
-                Span::styled(
-                    header_text,
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::DIM),
-                ),
-            ));
+            lines.push(Line::from(Span::styled(
+                header_text,
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
+            )));
 
             let col_width = ((area.width.saturating_sub(4)) / 2).max(20) as usize;
             let pairs = get_side_by_side(hunk);
@@ -124,12 +120,11 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
                     lines.push(right_line);
                 } else {
                     let padded_left = format!("{:<width$}", left_text, width = col_width);
-                    let spans: Vec<Span> = std::iter::once(
-                        Span::styled(padded_left, Style::default().fg(Color::White)),
-                    )
-                    .chain(
-                        std::iter::once(Span::raw("│")),
-                    )
+                    let spans: Vec<Span> = std::iter::once(Span::styled(
+                        padded_left,
+                        Style::default().fg(Color::White),
+                    ))
+                    .chain(std::iter::once(Span::raw("│")))
                     .chain(right_line.spans)
                     .collect();
                     lines.push(Line::from(spans));
@@ -138,9 +133,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
         }
 
         let inner = block.inner(area);
-        let scroll_offset = (app.diff_scroll as usize).min(
-            lines.len().saturating_sub(inner.height as usize),
-        );
+        let scroll_offset =
+            (app.diff_scroll as usize).min(lines.len().saturating_sub(inner.height as usize));
 
         let visible: Vec<Line> = lines
             .iter()
@@ -164,7 +158,10 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
     }
 }
 
-fn prefix_and_kind(line: Option<&crate::app::DiffLine>, is_left: bool) -> (&'static str, DiffLineKind) {
+fn prefix_and_kind(
+    line: Option<&crate::app::DiffLine>,
+    is_left: bool,
+) -> (&'static str, DiffLineKind) {
     match line {
         Some(l) => {
             let p = if is_left {
