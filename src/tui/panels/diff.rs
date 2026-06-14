@@ -96,43 +96,29 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
             .unwrap_or("");
 
         let inner_area = block.inner(area);
-        let col_width = ((inner_area.width.saturating_sub(1)) / 2).max(20) as usize;
+        let col_width = ((inner_area.width.saturating_sub(2)) / 2).max(20) as usize;
 
         let mut lines: Vec<Line> = Vec::new();
 
         for hunk in &diff.hunks {
             let header_text = hunk.header.trim();
             lines.push(Line::from(Span::styled(
-                header_text,
-                Style::default()
-                    .fg(theme::DIFF_HEADER)
-                    .add_modifier(Modifier::DIM),
+                format!(" {} ", header_text),
+                Style::default().fg(theme::DIFF_HEADER).bg(theme::SURFACE),
             )));
+
             let pairs = get_side_by_side(hunk);
 
             for &(old_line, new_line) in &pairs {
-                let left_line = colored_line(old_line, true, file_ext);
-                let right_line = colored_line(new_line, false, file_ext);
+                let left_spans = side_spans(old_line, true, file_ext, col_width, app.diff_h_scroll);
+                let right_spans =
+                    side_spans(new_line, false, file_ext, col_width, app.diff_h_scroll);
 
-                let left_text = left_line
-                    .spans
-                    .iter()
-                    .map(|s| s.content.clone())
-                    .collect::<String>();
-                if left_text.len() > col_width {
-                    lines.push(left_line);
-                    lines.push(right_line);
-                } else {
-                    let padded_left = format!("{:<width$}", left_text, width = col_width);
-                    let spans: Vec<Span> = std::iter::once(Span::styled(
-                        padded_left,
-                        Style::default().fg(theme::TEXT),
-                    ))
-                    .chain(std::iter::once(Span::raw("│")))
-                    .chain(right_line.spans)
-                    .collect();
-                    lines.push(Line::from(spans));
-                }
+                let mut row = Vec::new();
+                row.extend(left_spans);
+                row.push(Span::raw("│"));
+                row.extend(right_spans);
+                lines.push(Line::from(row));
             }
         }
 
@@ -147,9 +133,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &RuneApp) {
             .cloned()
             .collect();
 
-        let para = Paragraph::new(visible)
-            .block(block)
-            .scroll((app.diff_scroll, 0));
+        let para = Paragraph::new(visible).block(block);
 
         f.render_widget(para, area);
     } else {
@@ -195,42 +179,78 @@ fn diff_prefix_style(kind: &DiffLineKind) -> Style {
     }
 }
 
-fn colored_line(
+fn side_spans(
     line: Option<&crate::app::DiffLine>,
     is_left: bool,
     file_ext: &str,
-) -> Line<'static> {
+    col_width: usize,
+    h_scroll: u16,
+) -> Vec<Span<'static>> {
     let (prefix, kind) = prefix_and_kind(line, is_left);
     let content = match line {
         Some(l) => l.content.trim_end_matches('\n').to_string(),
         None => String::new(),
     };
 
-    let prefix_style = diff_prefix_style(&kind);
-    let prefix_span = Span::styled(prefix.to_string(), prefix_style);
-
-    if kind == DiffLineKind::Context && !content.is_empty() && !file_ext.is_empty() {
-        let mut spans = line_spans(file_ext, &content);
-        let mut result = vec![prefix_span];
-        result.append(&mut spans);
-        Line::from(result)
-    } else {
-        let content_style = diff_prefix_style(&kind);
-        let full = if content.is_empty() {
-            prefix.to_string()
-        } else {
-            let lineno = match line {
-                Some(l) => {
-                    let n = if is_left { l.old_lineno } else { l.new_lineno };
-                    match n {
-                        Some(n) => format!("{:>4}", n),
-                        None => "    ".to_string(),
-                    }
-                }
+    let lineno_str = match line {
+        Some(l) => {
+            let n = if is_left { l.old_lineno } else { l.new_lineno };
+            match n {
+                Some(n) => format!("{:>4}", n),
                 None => "    ".to_string(),
-            };
-            format!("{}{} {}", prefix, lineno, content)
-        };
-        Line::from(Span::styled(full, content_style))
+            }
+        }
+        None => "    ".to_string(),
+    };
+
+    let prefix_style = diff_prefix_style(&kind);
+    let mut spans = vec![
+        Span::styled(prefix.to_string(), prefix_style),
+        Span::raw(" "),
+        Span::styled(lineno_str, Style::default().fg(theme::TEXT_DIM)),
+        Span::raw(" "),
+    ];
+
+    let avail_width = col_width.saturating_sub(7);
+    if !content.is_empty() && avail_width > 0 {
+        let h = h_scroll as usize;
+        let chars: Vec<char> = content.chars().collect();
+        let start = h.min(chars.len());
+        let end = (start + avail_width).min(chars.len());
+        let visible: String = chars[start..end].iter().collect();
+
+        if !visible.is_empty() {
+            if kind == DiffLineKind::Context && !file_ext.is_empty() {
+                let mut hl_spans = line_spans(file_ext, &visible);
+                spans.append(&mut hl_spans);
+            } else if !file_ext.is_empty() {
+                let mut hl_spans = line_spans(file_ext, &visible);
+                let bg_color = match kind {
+                    DiffLineKind::Add => Color::Rgb(22, 42, 28),
+                    DiffLineKind::Delete => Color::Rgb(42, 22, 22),
+                    _ => Color::Rgb(0, 0, 0),
+                };
+                for span in &mut hl_spans {
+                    span.style = span.style.bg(bg_color);
+                }
+                spans.append(&mut hl_spans);
+            } else {
+                let base_style = diff_prefix_style(&kind);
+                let bg_color = match kind {
+                    DiffLineKind::Add => Color::Rgb(22, 42, 28),
+                    DiffLineKind::Delete => Color::Rgb(42, 22, 22),
+                    _ => Color::Rgb(0, 0, 0),
+                };
+                spans.push(Span::styled(visible, base_style.bg(bg_color)));
+            }
+        }
     }
+
+    let fixed_len: usize = col_width;
+    let current: usize = spans.iter().map(|s| s.content.len()).sum();
+    if current < fixed_len {
+        spans.push(Span::raw(" ".repeat(fixed_len - current)));
+    }
+
+    spans
 }

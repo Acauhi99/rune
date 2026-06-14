@@ -8,6 +8,7 @@ pub struct ChangedFile {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, PartialEq)]
 pub enum FileStatus {
     Added,
     Modified,
@@ -101,6 +102,7 @@ pub struct RuneApp {
     pub selected_file: usize,
     pub diff: Option<FileDiff>,
     pub diff_scroll: u16,
+    pub diff_h_scroll: u16,
     pub commits: Vec<CommitInfo>,
     pub selected_commit: usize,
     pub branches: Vec<BranchInfo>,
@@ -120,6 +122,7 @@ impl RuneApp {
             selected_file: 0,
             diff: None,
             diff_scroll: 0,
+            diff_h_scroll: 0,
             commits: Vec::new(),
             selected_commit: 0,
             branches: Vec::new(),

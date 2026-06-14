@@ -1,5 +1,6 @@
 use anyhow::Result;
 use git2::{DiffOptions, Repository};
+use std::fs;
 use std::path::Path;
 
 use crate::app::{DiffLine, DiffLineKind, FileDiff, Hunk};
@@ -129,6 +130,38 @@ fn extract_hunks(diff: &git2::Diff, delta_index: usize, hunks: &mut Vec<Hunk>) -
         }
     }
     Ok(())
+}
+
+pub fn get_full_file_content(repo: &Repository, path: &Path) -> Result<FileDiff> {
+    let full_path = repo
+        .workdir()
+        .map(|p| p.join(path))
+        .unwrap_or(path.to_path_buf());
+    let content = fs::read_to_string(&full_path).unwrap_or_default();
+    let lines: Vec<&str> = content.split('\n').collect();
+    let mut diff_lines = Vec::new();
+
+    for (i, line) in lines.iter().enumerate() {
+        let is_last = i == lines.len() - 1;
+        if is_last && line.is_empty() {
+            continue;
+        }
+        diff_lines.push(DiffLine {
+            kind: DiffLineKind::Add,
+            content: format!("{}\n", line),
+            old_lineno: None,
+            new_lineno: Some((i + 1) as u32),
+        });
+    }
+
+    Ok(FileDiff {
+        old_path: path.to_path_buf(),
+        new_path: path.to_path_buf(),
+        hunks: vec![Hunk {
+            header: format!("@@ -0,0 +1,{} @@", diff_lines.len()),
+            lines: diff_lines,
+        }],
+    })
 }
 
 pub fn get_side_by_side(hunk: &Hunk) -> Vec<(Option<&DiffLine>, Option<&DiffLine>)> {

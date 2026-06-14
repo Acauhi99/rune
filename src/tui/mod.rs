@@ -2,6 +2,7 @@ pub mod panels;
 
 use std::io;
 use std::path::Path;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -10,6 +11,7 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use notify::Watcher;
 use ratatui::Frame;
 use ratatui::Terminal;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -41,7 +43,13 @@ pub fn run(repo_path: &Path) -> Result<()> {
     let mut app = RuneApp::new(path);
     refresh_state(&repo, &mut app)?;
 
-    let res = run_app(&mut terminal, &repo, &mut app);
+    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+    let mut watcher = notify::recommended_watcher(move |res| {
+        let _ = tx.send(res);
+    })?;
+    let _ = watcher.watch(repo_path, notify::RecursiveMode::Recursive);
+
+    let res = run_app(&mut terminal, &repo, &mut app, &rx);
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -54,21 +62,21 @@ fn run_app(
     terminal: &mut CrosstermTerminal,
     repo: &git2::Repository,
     app: &mut RuneApp,
+    fs_rx: &mpsc::Receiver<notify::Result<notify::Event>>,
 ) -> Result<()> {
     let mut dialog: Option<crate::tui::panels::dialog::DialogState> = None;
-    let mut refresh_counter: u64 = 0;
 
     loop {
         terminal.draw(|f| draw(f, app, &dialog))?;
 
-        if !event::poll(Duration::from_millis(100))? {
-            refresh_counter += 1;
-            if refresh_counter.is_multiple_of(10) {
-                let _ = refresh_state(repo, app);
-                if app.mode == AppMode::Diff || app.focus == PanelFocus::Diff {
-                    let _ = load_diff(repo, app);
-                }
+        let _ = fs_rx.try_recv().map(|_| {
+            let _ = refresh_state(repo, app);
+            if app.mode == AppMode::Diff || app.focus == PanelFocus::Diff {
+                let _ = load_diff(repo, app);
             }
+        });
+
+        if !event::poll(Duration::from_millis(100))? {
             continue;
         }
 
@@ -199,7 +207,8 @@ fn draw_help(f: &mut Frame) {
         " Search & Display:",
         "  /             — Filter file tree",
         "  ?             — Toggle this help",
-        "  PageUp/Down   — Scroll diff",
+        "  PageUp/Down   — Scroll diff vertically",
+        "  ←/→ or h/l   — Scroll diff horizontally",
         "",
         " General:",
         "  q or Esc      — Quit",
@@ -283,6 +292,12 @@ fn handle_action(
         }
         Action::ScrollDown if app.diff_scroll < 10000 => {
             app.diff_scroll += 5;
+        }
+        Action::ScrollLeft => {
+            app.diff_h_scroll = app.diff_h_scroll.saturating_sub(5);
+        }
+        Action::ScrollRight if app.diff_h_scroll < 10000 => {
+            app.diff_h_scroll += 5;
         }
         Action::Enter => {
             if matches!(app.mode, AppMode::CommitLog) {
@@ -377,6 +392,11 @@ fn handle_dialog_event(
                     if !msg.is_empty() {
                         let _ = git::create_commit(repo, &msg);
                         refresh_state(repo, app)?;
+                        if app.selected_file >= app.changed_files.len() {
+                            app.diff = None;
+                        } else {
+                            let _ = load_diff(repo, app);
+                        }
                     }
                     return Ok(true);
                 }
@@ -473,6 +493,12 @@ fn handle_mouse(event: crossterm::event::MouseEvent, app: &mut RuneApp) {
                 app.diff_scroll = app.diff_scroll.saturating_sub(3);
             }
         },
+        MouseEventKind::ScrollRight => {
+            app.diff_h_scroll = app.diff_h_scroll.saturating_add(3).min(10000);
+        }
+        MouseEventKind::ScrollLeft => {
+            app.diff_h_scroll = app.diff_h_scroll.saturating_sub(3);
+        }
         _ => {}
     }
 }
@@ -488,11 +514,18 @@ fn refresh_state(repo: &git2::Repository, app: &mut RuneApp) -> Result<()> {
 }
 
 fn load_diff(repo: &git2::Repository, app: &mut RuneApp) -> Result<()> {
-    let path = app.selected_file_entry().map(|f| f.path.clone());
+    let entry = app
+        .selected_file_entry()
+        .map(|f| (f.path.clone(), f.status.clone()));
 
-    if let Some(path) = path {
+    if let Some((path, status)) = entry {
         app.diff_scroll = 0;
+        app.diff_h_scroll = 0;
 
+        let is_new = matches!(
+            status,
+            crate::app::FileStatus::Added | crate::app::FileStatus::Untracked
+        );
         let staged_diff = diff::get_staged_diff(repo, &path).ok();
         let workdir_diff = diff::get_workdir_diff(repo, &path).ok();
 
@@ -500,6 +533,7 @@ fn load_diff(repo: &git2::Repository, app: &mut RuneApp) -> Result<()> {
             (Some(s), Some(_w)) if !s.is_empty() => Some(s),
             (_, Some(w)) if !w.is_empty() => Some(w),
             (Some(s), _) if !s.is_empty() => Some(s),
+            _ if is_new => diff::get_full_file_content(repo, &path).ok(),
             _ => None,
         };
     } else {
